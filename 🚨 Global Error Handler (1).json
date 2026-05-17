@@ -1,0 +1,171 @@
+{
+  "name": "🚨 Global Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "4d701c94-786d-49b1-92b1-8f8bad2419a2",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\n// Workflow info\nconst workflowName  = data?.workflow?.name              || 'Unknown Workflow';\nconst workflowId    = data?.workflow?.id                || 'N/A';\nconst executionId   = data?.execution?.id               || 'N/A';\nconst executionMode = data?.execution?.mode             || 'N/A';\nconst startedAt     = data?.execution?.startedAt        || 'N/A';\nconst lastNode      = data?.execution?.lastNodeExecuted || 'N/A';\n\n// Build URLs manually\nconst n8nBaseUrl   = 'https://abobby.app.n8n.cloud';\nconst workflowUrl  = workflowId  !== 'N/A' ? `${n8nBaseUrl}/workflow/${workflowId}` : '#';\nconst executionUrl = executionId !== 'N/A' ? `${n8nBaseUrl}/workflow/${workflowId}/executions/${executionId}` : '#';\n\n// Basic error info\nconst errorMessage = data?.execution?.error?.message ||\n                     data?.error?.message             ||\n                     'No error message';\n\nconst errorName    = data?.execution?.error?.name    ||\n                     data?.error?.name                ||\n                     'Unknown Error';\n\nconst stackTrace   = data?.execution?.error?.stack   ||\n                     data?.error?.stack               ||\n                     'No stack trace';\n\n// Capture deeper error details\nconst errorCause =\n  data?.execution?.error?.cause?.message     ||\n  data?.execution?.error?.cause?.description ||\n  data?.execution?.error?.description        ||\n  data?.error?.cause?.message                ||\n  data?.error?.cause?.description            ||\n  data?.error?.description                   ||\n  '';\n\n// Capture HTTP status if any\nconst httpStatus =\n  data?.execution?.error?.cause?.response?.status ||\n  data?.execution?.error?.httpCode               ||\n  data?.error?.httpCode                          ||\n  '';\n\n// Capture API response body\nconst apiResponseBody =\n  data?.execution?.error?.cause?.response?.body ||\n  data?.execution?.error?.cause?.body           ||\n  data?.error?.cause?.response?.body            ||\n  data?.error?.cause?.body                      ||\n  '';\n\n// Build full error message\nlet fullErrorMessage = errorMessage;\nif (errorCause) fullErrorMessage += `\\n📎 Cause: ${errorCause}`;\nif (httpStatus) fullErrorMessage += `\\n🔢 HTTP Status: ${httpStatus}`;\nif (apiResponseBody) {\n  const bodyText = typeof apiResponseBody === 'object'\n    ? JSON.stringify(apiResponseBody, null, 2)\n    : apiResponseBody;\n  fullErrorMessage += `\\n📄 API Response: ${bodyText}`;\n}\n\n// Time\nconst timestamp    = new Date().toISOString();\nconst readableTime = new Date().toLocaleString('en-IN', {\n  timeZone: 'Asia/Kolkata',\n  dateStyle: 'full',\n  timeStyle: 'long'\n});\n\n// Email HTML\nconst emailHtml = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }\n    .container { background: #ffffff; border-radius: 8px; padding: 30px; max-width: 700px; margin: auto; border-top: 5px solid #e74c3c; }\n    h2 { color: #e74c3c; margin-top: 0; }\n    .badge { display: inline-block; background: #e74c3c; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 20px; }\n    table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n    td { padding: 10px 14px; border-bottom: 1px solid #eeeeee; vertical-align: top; }\n    td:first-child { font-weight: bold; color: #555; width: 180px; white-space: nowrap; }\n    .error-box { background: #fff5f5; border-left: 4px solid #e74c3c; padding: 12px 16px; border-radius: 4px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }\n    .stack { background: #1e1e2e; color: #cdd6f4; font-family: monospace; font-size: 12px; padding: 16px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }\n    .btn { display: inline-block; background: #3498db; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; margin: 5px; font-size: 14px; }\n    .footer { margin-top: 30px; font-size: 12px; color: #aaa; text-align: center; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"badge\">🚨 ERROR ALERT</div>\n    <h2>Workflow Execution Failed</h2>\n    <table>\n      <tr><td>Workflow Name</td><td>${workflowName}</td></tr>\n      <tr><td>Workflow ID</td><td>${workflowId}</td></tr>\n      <tr><td>Error Type</td><td>${errorName}</td></tr>\n      <tr><td>Failed Node</td><td>${lastNode}</td></tr>\n      <tr><td>Execution ID</td><td>${executionId}</td></tr>\n      <tr><td>Execution Mode</td><td>${executionMode}</td></tr>\n      <tr><td>Started At</td><td>${startedAt}</td></tr>\n      <tr><td>Alert Time (IST)</td><td>${readableTime}</td></tr>\n    </table>\n\n    <h3 style=\"color:#e74c3c\">❌ Full Error Details</h3>\n    <div class=\"error-box\">${fullErrorMessage.replace(/\\n/g, '<br>')}</div>\n\n    <h3 style=\"color:#555\">📟 Stack Trace</h3>\n    <div class=\"stack\">${stackTrace}</div>\n\n    <div style=\"margin-top:24px\">\n      <a href=\"${workflowUrl}\" class=\"btn\">🔗 Open Workflow</a>\n      <a href=\"${executionUrl}\" class=\"btn\" style=\"background:#27ae60\">📋 View Execution</a>\n    </div>\n    <div class=\"footer\">Sent by n8n Global Error Handler • ${timestamp}</div>\n  </div>\n</body>\n</html>\n`;\n\n// Slack message\nconst slackMessage = `🚨 *WORKFLOW ERROR ALERT*\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n📋 *Workflow Details*\n- *Name:* ${workflowName}\n- *ID:* ${workflowId}\n\n❌ *Error Info*\n- *Type:* ${errorName}\n- *Message:* ${errorMessage}${errorCause ? `\\n- *Cause:* ${errorCause}` : ''}${httpStatus ? `\\n- *HTTP Status:* ${httpStatus}` : ''}${apiResponseBody ? `\\n- *API Response:* ${typeof apiResponseBody === 'object' ? JSON.stringify(apiResponseBody) : apiResponseBody}` : ''}\n\n🔍 *Execution Details*\n- *Failed Node:* ${lastNode}\n- *Execution ID:* ${executionId}\n- *Mode:* ${executionMode}\n- *Started At:* ${startedAt}\n- *Alert Time (IST):* ${readableTime}\n\n🔗 *Quick Actions*\n- <${workflowUrl}|👉 Open Workflow>\n- <${executionUrl}|📋 View Execution>\n\n━━━━━━━━━━━━━━━━━━━━━━━━`;\n\nreturn [{\n  json: {\n    workflowName,\n    workflowId,\n    workflowUrl,\n    executionId,\n    executionUrl,\n    executionMode,\n    startedAt,\n    lastNode,\n    errorMessage,\n    errorName,\n    errorCause,\n    httpStatus,\n    apiResponseBody,\n    fullErrorMessage,\n    stackTrace,\n    timestamp,\n    readableTime,\n    emailHtml,\n    slackMessage,\n    emailSubject: `🚨 [n8n ERROR] ${workflowName} — ${errorName}: ${errorMessage}`\n  }\n}];"
+      },
+      "id": "2e49455f-3643-446b-b89d-f9466aeaeee0",
+      "name": "Format Error Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "ajaybobby631@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailHtml }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "8dbde261-32ed-4125-983c-f857d954e7d8",
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        176,
+        -112
+      ],
+      "webhookId": "a8a90509-c503-44ed-91cb-9375dbcb8093",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "4UdjBwXYMqJfC69M",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -96,
+        -48
+      ],
+      "id": "7da28510-7dbd-4eeb-981c-cb56c6e5d7f1",
+      "name": "Wait",
+      "webhookId": "9a3d8d01-4ca5-4b7d-a9ff-7bb06488ebdf"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0AQNQSAE67",
+          "mode": "list",
+          "cachedResultName": "all-ajay"
+        },
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "link_names": false,
+          "mrkdwn": false,
+          "unfurl_links": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        128
+      ],
+      "id": "a46fcf93-f79b-4a0d-ad83-d87aff9171bd",
+      "name": "Send a message",
+      "webhookId": "1c07649d-5346-4042-bb66-309f7d653974",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "pzzebdgJfxBJ21dD",
+          "name": "Slack OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error Details": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "942T0nOXDOQ1sYZA"
+  },
+  "versionId": "c4975225-ae93-4b84-8284-5520546b0794",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f51b12513051a7c9ce572a96caef9ad47ebde98d6f438f82d0a4d62efebb45bd"
+  },
+  "id": "942T0nOXDOQ1sYZA",
+  "tags": [
+    {
+      "updatedAt": "2026-04-02T11:10:08.932Z",
+      "createdAt": "2026-04-02T11:10:08.932Z",
+      "id": "fMEVn4shgsYwWiPO",
+      "name": "Error Handling"
+    }
+  ]
+}
