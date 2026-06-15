@@ -1,100 +1,100 @@
 # 🚨 Global Error Handler — n8n Workflow
 
-A reusable error-handling workflow for n8n that automatically catches failures across all your workflows and sends formatted alerts via **Gmail** and **Slack**.
+> A production-ready, reusable error monitoring workflow for n8n that instantly alerts you via **Gmail** and **Slack** whenever any workflow fails — with full debug context in every alert.
 
 ---
 
-## 📋 What It Does
+## 🧩 The Problem It Solves
 
-When any workflow in your n8n instance fails, this workflow:
-
-1. **Captures** the full error details — error type, message, cause, HTTP status, API response body, failed node, and stack trace
-2. **Formats** a rich HTML email and a structured Slack message
-3. **Waits 10 seconds** (to avoid alert floods during rapid retries)
-4. **Sends both alerts simultaneously** — email to Gmail and message to Slack
+In production automation setups, workflows fail silently — and you only find out hours later when a client complains or data goes missing. This workflow acts as a **central nervous system** for your entire n8n instance: attach it once, and every failure across every workflow gets reported immediately with full context for debugging.
 
 ---
 
-## 🔁 Workflow Flow
+## ⚙️ How It Works
 
 ```
-Error Trigger → Format Error Details → Wait (10s) → Send Email Alert
-                                                  ↘ Send Slack Message
+Any Workflow Fails
+       ↓
+Error Trigger (catches all failures)
+       ↓
+Format Error Details (extracts node, trace, HTTP status, cause)
+       ↓
+Wait 10s (prevents duplicate alerts on rapid retries)
+       ↓
+┌──────────────────────┬──────────────────────┐
+│  Gmail HTML Alert    │   Slack Message       │
+│  (full debug report) │   (instant ping)      │
+└──────────────────────┴──────────────────────┘
 ```
 
 ---
 
-## ⚙️ Nodes
+## 📬 What Each Alert Contains
+
+| Field | Description |
+|---|---|
+| Workflow Name & ID | Direct link to open it in n8n |
+| Error Type & Message | Exact error for fast diagnosis |
+| Failed Node | Which node broke and why |
+| HTTP Status & API Response | Full upstream error context |
+| Stack Trace | Complete trace for debugging |
+| Execution ID | Link to the exact failed run |
+| Timestamp | When it happened (timezone-aware) |
+
+---
+
+## 🔁 Workflow Nodes
 
 | Node | Type | Purpose |
-|------|------|---------|
-| Error Trigger | `n8n-nodes-base.errorTrigger` | Fires when any connected workflow fails |
-| Format Error Details | `n8n-nodes-base.code` | Extracts and formats all error info into email HTML + Slack message |
-| Wait | `n8n-nodes-base.wait` | 10-second delay before sending alerts |
-| Send Email Alert | `n8n-nodes-base.gmail` | Sends a styled HTML error report via Gmail |
-| Send a message | `n8n-nodes-base.slack` | Posts a formatted alert to a Slack channel |
+|---|---|---|
+| Error Trigger | `n8n-nodes-base.errorTrigger` | Fires on any connected workflow failure |
+| Format Error Details | `n8n-nodes-base.code` | Builds rich HTML email + Slack payload |
+| Wait | `n8n-nodes-base.wait` | 10s delay to prevent alert floods |
+| Send Email Alert | `n8n-nodes-base.gmail` | Sends styled HTML debug report |
+| Send a message | `n8n-nodes-base.slack` | Posts formatted alert to Slack channel |
 
 ---
 
-## 🚀 Setup Instructions
+## 🚀 Setup (5 Steps)
 
 ### 1. Import the Workflow
-- In n8n, go to **Workflows → Import**
+- In n8n go to **Workflows → Import**
 - Upload `global-error-handler.json`
 
 ### 2. Configure Credentials
-- **Gmail**: Connect your Gmail account via OAuth2
-- **Slack**: Connect your Slack workspace via OAuth2
+- **Gmail**: OAuth2 connection
+- **Slack**: OAuth2 workspace connection
 
-### 3. Update Settings
-- In **Send Email Alert**: Change the `sendTo` email address to your own
-- In **Send a message**: Select your desired Slack channel
+### 3. Update Alert Destinations
+- **Send Email Alert** node → set your `sendTo` email
+- **Send a message** node → select your Slack channel
 
-### 4. Set as Error Workflow
-- Go to each workflow you want monitored
-- Open **Settings → Error Workflow**
+### 4. Attach to Your Workflows
+- Open each workflow → **Settings → Error Workflow**
 - Select **🚨 Global Error Handler**
 
 ### 5. Activate
-- Toggle the workflow to **Active**
+- Toggle this workflow to **Active**
 
----
-
-## 📬 Alert Contents
-
-### Email Alert (HTML)
-- Workflow name, ID, and direct link
-- Error type, message, cause, and HTTP status
-- Failed node name and execution ID
-- Full stack trace
-- Direct links to open the workflow and view the execution
-
-### Slack Alert
-- Same information in Slack markdown format
-- Clickable links to the workflow and execution
+> ✅ Done — every future failure will now alert you automatically.
 
 ---
 
 ## 🛠️ Customization
 
 | What to change | Where |
-|----------------|-------|
-| Alert email address | `Send Email Alert` node → `sendTo` field |
+|---|---|
+| Alert email address | `Send Email Alert` node → `sendTo` |
 | Slack channel | `Send a message` node → `channelId` |
-| Wait duration | `Wait` node → `amount` (in seconds) |
-| n8n instance URL | `Format Error Details` node → `n8nBaseUrl` variable |
-| Timezone | `Format Error Details` node → `toLocaleString` locale/timezone |
+| Wait duration | `Wait` node → `amount` (seconds) |
+| n8n instance URL | `Format Error Details` node → `n8nBaseUrl` |
+| Timezone | `Format Error Details` node → `toLocaleString` |
 
 ---
 
-## 📌 Notes
+## 📌 Design Decisions
 
-- The workflow is set as its own error workflow (`errorWorkflow: 942T0nOXDOQ1sYZA`) to prevent infinite error loops
-- Caller policy is set to `workflowsFromSameOwner` — only workflows under the same owner can trigger it
-- The 10-second wait helps prevent duplicate alerts if a workflow retries quickly
+- **Self-referencing error workflow**: This workflow is set as its own error handler (`errorWorkflow: 942T0nOXDOQ1sYZA`) to prevent infinite alert loops if the handler itself fails.
+- **10-second wait**: Prevents duplicate Slack/email floods when a workflow retries multiple times in quick succession.
+- **Caller policy**: Set to `workflowsFromSameOwner` — only your workflows can trigger it, preventing cross-account noise.
 
----
-
-## 🏷️ Tags
-
-`Error Handling` · `n8n` · `Automation` · `Gmail` · `Slack`
